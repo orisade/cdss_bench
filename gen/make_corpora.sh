@@ -89,6 +89,11 @@ for type in $(cdss_split "$TYPES"); do
   cdss_info "[$type] reference for '$PATTERN': lines=$ref_lines occ=$ref_occ (per unit)"
 
   for codec in $(cdss_split "$CODECS"); do
+    case "$codec" in
+      gzip|zstd|lz4)
+        cdss_have "$codec" || { cdss_info "[$type] skip codec '$codec' (CLI not installed)"; continue; };;
+      ans) cdss_info "[$type] skip codec 'ans' (GPU-only; use bench_gpu.sh)"; continue;;
+    esac
     ext="$(codec_ext "$codec")"; lvl="$(codec_level "$codec")"
     unit_art="$tdir/unit.$ext"
     cdss_info "[$type/$codec] compressing unit (level $lvl)"
