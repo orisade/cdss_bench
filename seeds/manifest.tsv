@@ -1,20 +1,22 @@
 # cdss_bench seed manifest.  One row per data type.
 # Columns (TAB-separated):
 #   type      logical type name (wiki|json|log|sdf|...)
-#   filename  file to place under seeds/data/
-#   size_mib  expected/target seed size in MiB (used for synthetic fallback)
-#   sha256    expected checksum, or "-" to skip verification (synthetic seeds)
-#   source    where to fetch a REAL seed from; one of:
-#               -                 (no real source; synthetic generator is used)
-#               s3://bucket/key   (fetched with `aws s3 cp`)
-#               https://...       (fetched with curl)
+#   filename  plain file to place under seeds/data/
+#   size_mib  synthetic-fallback size in MiB (used ONLY if no real seed found)
+#   sha256    sha256 of the PLAIN seed; verified after fetch/decompress ("-"=skip)
+#   source    where to get the REAL seed:
+#               bundled:seeds/real/<file>.zst   committed, zstd-compressed (default)
+#               s3://bucket/key                 fetched with `aws s3 cp`
+#               https://...                     fetched with curl
+#               -                               none; synthetic generator is used
 #
-# To use REAL corpora: stage the four seed files (e.g. in an S3 bucket), then
-# fill in sha256 + source below. Until then, fetch_seeds.sh generates
-# deterministic synthetic seeds so the harness runs out-of-the-box anywhere.
+# The four rows below are the REAL rev4 base corpora (100 MB each), committed
+# zstd-compressed under seeds/real/ so every clone/instance is apple-to-apple.
+# To use different data: replace the bundled .zst (or point source at S3/https)
+# and update the sha256.
 #
 # type	filename	size_mib	sha256	source
-wiki	wiki_seed.txt	100	-	-
-json	json_seed.json	100	-	-
-log	log_seed.log	100	-	-
-sdf	sdf_seed.sdf	100	-	-
+wiki	wiki_seed.txt	95	2b49720ec4d78c3c9fabaee6e4179a5e997302b3a70029f30f2d582218c024a8	bundled:seeds/real/wiki_seed.txt.zst
+json	json_seed.json	98	61a80de3cb174f6ed6fcf3a25f543b446b6ddde3c43ebae348dec5655fa3183d	bundled:seeds/real/json_seed.json.zst
+log	log_seed.log	100	604ca43e7ca85f066aaf17c2341efe05f6134f7426c110d97d016d4357302cca	bundled:seeds/real/log_seed.log.zst
+sdf	sdf_seed.sdf	99	ed59e9755ca24760b9e87ef415fcaafd8baf55fab298c9b0a985ac66c54c7a6f	bundled:seeds/real/sdf_seed.sdf.zst

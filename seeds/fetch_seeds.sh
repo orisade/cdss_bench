@@ -54,6 +54,16 @@ for type in $(cdss_split "$TYPES"); do
   # 2. Real source.
   fetched=0
   case "$source" in
+    bundled:*)
+      zpath="$CDSS_ROOT/${source#bundled:}"
+      if [ -f "$zpath" ]; then
+        cdss_have zstd || cdss_die "zstd required to decompress bundled seed $zpath"
+        cdss_info "decompressing bundled real seed -> $fname"
+        zstd -dq -f -o "$dst" "$zpath" && fetched=1 || cdss_info "bundled decompress failed for $type"
+      else
+        cdss_info "bundled seed missing ($zpath); will fall back to synthetic"
+      fi
+      ;;
     s3://*)
       if cdss_have aws; then
         cdss_info "fetching $fname from $source"
