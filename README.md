@@ -7,8 +7,9 @@ search throughput over compressed corpora, on **fresh CPU or GPU instances**.
   no CUDA. Clone and run.
 - **GPU path** clones and builds the [cuda-direct-stream-search](https://github.com/orisade/cuda-direct-stream-search)
   engine (nvCOMP) and benchmarks `cdss_search`.
-- Runs **out-of-the-box anywhere**: if no real corpora are supplied it generates
-  deterministic **synthetic seeds** for the four data types.
+- Runs **out-of-the-box anywhere**: the four real rev4 base corpora (100 MB each)
+  ship in-repo **zstd-compressed** under `seeds/real/`, so every instance is
+  apple-to-apple. (A synthetic generator is the fallback if a seed is missing.)
 
 ## Quick start (CPU-only instance)
 
@@ -54,12 +55,20 @@ requested size (valid multiframe `.zst` / multi-member `.gz` / concatenated
 the real 1-unit ratio and never writes a huge plain file. Generated data lives
 under `corpora/` and `results/` (both git-ignored).
 
-## Using REAL corpora instead of synthetic
+## Corpora: real by default
 
-Stage your four seed files (e.g. in S3), then edit `seeds/manifest.tsv` to set
-each type's `sha256` and `source` (`s3://bucket/key` or `https://…`).
-`fetch_seeds.sh` prefers a verified local file, then the manifest source, then
-the synthetic generator. Dropping files directly into `seeds/data/` also works.
+The four real rev4 base corpora ship **committed, zstd-compressed** under
+`seeds/real/` (enwik8 wiki, nested-random JSON, macos syslog, primetime SDF;
+100 MB each, ~94 MB total). `fetch_seeds.sh` decompresses and **sha256-verifies**
+them into `seeds/data/`, so every clone is apple-to-apple with no S3 needed.
+
+To use **different** data: replace the `seeds/real/<name>.zst` blob (or point the
+`source` column of `seeds/manifest.tsv` at `s3://…`/`https://…`) and update the
+`sha256`. Dropping a plain file directly into `seeds/data/` also works. If a
+seed cannot be resolved, a deterministic **synthetic** generator is the fallback.
+
+> Note: the json base file is ~65 MB compressed, above GitHub's 50 MB *recommended*
+> size (a warning, not a limit). If the repo grows, migrate `seeds/real/` to Git LFS.
 
 ## Configuration
 
