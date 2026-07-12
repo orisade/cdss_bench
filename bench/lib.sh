@@ -39,7 +39,7 @@ cdss_timed() {
 cdss_gibs() { python3 -c "print(round(($1/1073741824.0)/($2/1000.0), 4) if $2>0 else 0)"; }
 
 # CSV header + row. Columns are fixed and consumed by analyze/aggregate.py.
-CDSS_CSV_HEADER='host,has_gpu,type,size_units,unit_mib,codec,level,phase,tool,pattern,decomp_bytes,comp_bytes,ratio,avg_ms,gibs,match_count,expected,correct,runs_ms'
+CDSS_CSV_HEADER='host,has_gpu,type,size_gib,codec,level,phase,tool,pattern,decomp_bytes,comp_bytes,ratio,avg_ms,gibs,match_count,expected,correct,runs_ms'
 cdss_csv_init() { echo "$CDSS_CSV_HEADER" > "$1"; }
 # cdss_csv_row FILE field1 field2 ...  (fields already ordered per header)
 cdss_csv_row() {

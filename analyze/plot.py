@@ -43,7 +43,7 @@ def main():
     by_type = defaultdict(lambda: defaultdict(list))
     for r in rows:
         lbl = ("GPU " if r.get("has_gpu") == "1" else "") + r["codec"]
-        by_type[r["type"]][lbl].append((fnum(r["size_units"]), fnum(r["gibs"])))
+        by_type[r["type"]][lbl].append((fnum(r["size_gib"]), fnum(r["gibs"])))
 
     for typ, codecs in sorted(by_type.items()):
         plt.figure(figsize=(7, 4.5))
@@ -51,7 +51,7 @@ def main():
             pts = sorted(set(pts))
             xs = [p[0] for p in pts]; ys = [p[1] for p in pts]
             plt.plot(xs, ys, marker="o", label=codec)
-        plt.xlabel("corpus size (units)"); plt.ylabel("throughput (decompressed GiB/s)")
+        plt.xlabel("corpus size (GiB)"); plt.ylabel("throughput (decompressed GiB/s)")
         plt.title("%s -- %s throughput vs size" % (typ, a.phase))
         plt.grid(True, alpha=0.3); plt.legend()
         out = os.path.join(outdir, "throughput_%s_%s.png" % (typ, a.phase))

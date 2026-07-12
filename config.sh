@@ -23,12 +23,9 @@ CDSS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # --- Benchmark defaults ----------------------------------------------------
 # Data types to build/benchmark. Known synthetic generators: wiki json log sdf
 : "${CDSS_TYPES:=wiki,json,log,sdf}"
-# Decompressed corpus sizes, in units of CDSS_UNIT_MIB (see below), comma list.
+# Target corpus sizes in GiB (comma list). Each is built by duplicating the
+# ~100 MB base seed up to that size, then compressing.
 : "${CDSS_SIZES:=1,2,10}"
-# Size of ONE unit, in MiB. The seed is tiled to this to form the base plain,
-# compressed once, then that compressed artifact is concatenated N times for
-# each requested size. Default 1024 MiB = 1 GiB unit (so sizes are in GiB).
-: "${CDSS_UNIT_MIB:=1024}"
 # Literal search pattern. "the" has no self-overlap, so grep -o agrees with the
 # GPU engine's start-position count (see engine docs).
 : "${CDSS_PATTERN:=the}"

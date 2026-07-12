@@ -75,9 +75,9 @@ while IFS=$'\t' read -r type codec size decomp comp ratio path exp_lines exp_occ
   if [ "$codec" != "plain" ]; then
     cdss_timed "$dcmd > /dev/null"
     gibs="$(cdss_gibs "$decomp" "$RT_AVG_MS")"
-    cdss_csv_row "$OUT" "$HOST" 0 "$type" "$size" "$CDSS_UNIT_MIB" "$codec" "$level" \
+    cdss_csv_row "$OUT" "$HOST" 0 "$type" "$size" "$codec" "$level" \
       decode "$tool" "$PATTERN" "$decomp" "$comp" "$ratio" "$RT_AVG_MS" "$gibs" "" "" "" "\"$RT_RUNS\""
-    cdss_info "  [$type/$codec/${size}u] decode  ${RT_AVG_MS} ms  ${gibs} GiB/s"
+    cdss_info "  [$type/$codec/${size}GiB] decode  ${RT_AVG_MS} ms  ${gibs} GiB/s"
   fi
 
   # --- search (decompress | grep -c) ---
@@ -89,11 +89,10 @@ while IFS=$'\t' read -r type codec size decomp comp ratio path exp_lines exp_occ
   cdss_timed "$scmd"
   count="$(echo "$RT_OUT" | tr -dc '0-9')"; [ -n "$count" ] || count=0
   gibs="$(cdss_gibs "$decomp" "$RT_AVG_MS")"
-  tol="$size"
-  correct=$(python3 -c "print(1 if abs($count-$exp_lines)<=$tol else 0)")
-  cdss_csv_row "$OUT" "$HOST" 0 "$type" "$size" "$CDSS_UNIT_MIB" "$codec" "$level" \
+  correct=$(python3 -c "print(1 if $count==$exp_lines else 0)")
+  cdss_csv_row "$OUT" "$HOST" 0 "$type" "$size" "$codec" "$level" \
     search "$tool|grep" "$PATTERN" "$decomp" "$comp" "$ratio" "$RT_AVG_MS" "$gibs" "$count" "$exp_lines" "$correct" "\"$RT_RUNS\""
-  cdss_info "  [$type/$codec/${size}u] search  ${RT_AVG_MS} ms  ${gibs} GiB/s  count=$count exp=$exp_lines correct=$correct"
+  cdss_info "  [$type/$codec/${size}GiB] search  ${RT_AVG_MS} ms  ${gibs} GiB/s  count=$count exp=$exp_lines correct=$correct"
 done < "$INDEX"
 
 cdss_info "CPU results written: $OUT"

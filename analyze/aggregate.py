@@ -38,14 +38,14 @@ def main():
                                "count": None, "expected": None})
     for r in rows:
         key = (r.get("host",""), int(fnum(r.get("has_gpu"))), r["type"],
-               r["size_units"], r["codec"], r["phase"])
+               r["size_gib"], r["codec"], r["phase"])
         g = agg[key]
         g["gibs"].append(fnum(r.get("gibs")))
         g["ms"].append(fnum(r.get("avg_ms")))
         if r.get("correct") not in (None, ""): g["correct"].append(int(fnum(r["correct"])))
         g["ratio"] = r.get("ratio"); g["count"] = r.get("match_count"); g["expected"] = r.get("expected")
 
-    hdr = ["host","has_gpu","type","size","codec","phase","avg_ms","gibs","ratio","correct","count","expected"]
+    hdr = ["host","has_gpu","type","size_gib","codec","phase","avg_ms","gibs","ratio","correct","count","expected"]
     print("  ".join(f"{h:>9}" if h not in ("type","codec","phase") else f"{h:>7}" for h in hdr))
     out_rows = []
     for key in sorted(agg):

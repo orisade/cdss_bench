@@ -1,32 +1,28 @@
 #!/usr/bin/env bash
-# Build benchmark corpora from seeds.
+# Build benchmark corpora from the ~100 MB base seeds.
 #
-# For each type: tile the seed to a UNIT plain (CDSS_UNIT_MIB), compute the
-# reference match counts, compress that unit once per codec, then for each
-# requested size concatenate the compressed unit N times (valid multiframe
-# .zst / multi-member .gz / concatenated .lz4 -- all decode natively). This
-# keeps the compression ratio pinned to the real 1-unit ratio and never
-# materializes a huge plain file.
+# Model (simple): for each requested size (in GiB), DUPLICATE the base seed up to
+# that size to form a plain file, then COMPRESS that plain file once per codec.
+# The plain is grepped for the exact reference match count, then (by default)
+# deleted. No "unit" abstraction -- size N means N GiB of decompressed data.
 #
 # Writes $CDSS_CORPORA_DIR/corpus_index.tsv describing every artifact, consumed
 # by the bench scripts.
 #
 # Usage:
 #   make_corpora.sh [--types wiki,json,log,sdf] [--sizes 1,2,10]
-#                   [--unit-mib 1024] [--codecs gzip,zstd,lz4]
-#                   [--pattern the] [--keep-plain]
+#                   [--codecs gzip,zstd,lz4] [--pattern the] [--keep-plain]
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=/dev/null
 . "$HERE/../config.sh"
 
-TYPES="$CDSS_TYPES"; SIZES="$CDSS_SIZES"; UNIT_MIB="$CDSS_UNIT_MIB"
+TYPES="$CDSS_TYPES"; SIZES="$CDSS_SIZES"
 CODECS="$CDSS_CODECS"; PATTERN="$CDSS_PATTERN"; KEEP_PLAIN=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --types) TYPES="$2"; shift 2;;
     --sizes) SIZES="$2"; shift 2;;
-    --unit-mib) UNIT_MIB="$2"; shift 2;;
     --codecs) CODECS="$2"; shift 2;;
     --pattern) PATTERN="$2"; shift 2;;
     --keep-plain) KEEP_PLAIN=1; shift;;
@@ -38,12 +34,13 @@ done
 INDEX="$CDSS_CORPORA_DIR/corpus_index.tsv"
 mkdir -p "$CDSS_CORPORA_DIR"
 : > "$INDEX"
-printf '# type\tcodec\tsize\tdecomp_bytes\tcomp_bytes\tratio\tpath\texp_lines\texp_occ\tlevel\n' >> "$INDEX"
+printf '# type\tcodec\tsize_gib\tdecomp_bytes\tcomp_bytes\tratio\tpath\texp_lines\texp_occ\tlevel\n' >> "$INDEX"
 
-# Codec -> (extension, compress-command-template). $LVL and files substituted below.
+GIB=1073741824
+
 codec_ext()  { case "$1" in gzip) echo gz;; zstd) echo zst;; lz4) echo lz4;; *) echo "$1";; esac; }
 codec_level(){ case "$1" in gzip) echo "$CDSS_GZIP_LEVEL";; zstd) echo "$CDSS_ZSTD_LEVEL";; lz4) echo "$CDSS_LZ4_LEVEL";; *) echo 0;; esac; }
-compress_unit() { # $1=codec $2=level $3=in_plain $4=out
+compress_file() { # $1=codec $2=level $3=in_plain $4=out
   case "$1" in
     gzip) gzip -q -"$2" -c "$3" > "$4";;
     zstd) zstd -q -f -"$2" -c "$3" > "$4";;
@@ -55,80 +52,58 @@ compress_unit() { # $1=codec $2=level $3=in_plain $4=out
 # Ensure seeds exist for the requested types.
 "$CDSS_ROOT/seeds/fetch_seeds.sh" --types "$TYPES"
 
-UNIT_BYTES=$(( UNIT_MIB * 1024 * 1024 ))
-
-seed_for_type() { # echo seed path for a type (first matching file in seeds/data)
+seed_for_type() {
   local t="$1" f
   f="$(awk -F'\t' -v t="$t" '!/^#/ && $1==t {print $2; exit}' "$CDSS_ROOT/seeds/manifest.tsv")"
   [ -n "$f" ] && [ -f "$CDSS_SEEDS_DIR/$f" ] && { echo "$CDSS_SEEDS_DIR/$f"; return; }
-  # fall back to any seed file starting with the type name
   ls "$CDSS_SEEDS_DIR/${t}"* 2>/dev/null | head -1
 }
 
 for type in $(cdss_split "$TYPES"); do
   seed="$(seed_for_type "$type")"
   [ -n "$seed" ] && [ -f "$seed" ] || cdss_die "no seed for type $type"
-  tdir="$CDSS_CORPORA_DIR/$type"; mkdir -p "$tdir"
-  plain="$tdir/unit_plain.dat"
-
-  cdss_info "[$type] tiling seed -> unit plain ($UNIT_MIB MiB)"
-  # Tile the seed to exactly UNIT_BYTES using a BOUNDED loop (a bounded number
-  # of copies piped through head -c). The final cat may get SIGPIPE when head
-  # stops; that is benign and the loop still terminates -> guard with || true.
   seed_bytes=$(cdss_filesize "$seed")
-  copies=$(( (UNIT_BYTES + seed_bytes - 1) / seed_bytes ))
-  ( i=0; while [ "$i" -lt "$copies" ]; do cat "$seed"; i=$((i+1)); done ) 2>/dev/null \
-    | head -c "$UNIT_BYTES" > "$plain" || true
-  [ "$(cdss_filesize "$plain")" -eq "$UNIT_BYTES" ] || cdss_die "tiling produced wrong size for $type"
+  tdir="$CDSS_CORPORA_DIR/$type"; mkdir -p "$tdir"
 
-  # Reference counts on the unit plain (grep exits 1 when zero matches).
-  set +e
-  ref_lines=$(grep -c -F "$PATTERN" "$plain"); [ $? -gt 1 ] && ref_lines=0
-  ref_occ=$(grep -o -F "$PATTERN" "$plain" | wc -l | tr -d ' ')
-  set -e
-  cdss_info "[$type] reference for '$PATTERN': lines=$ref_lines occ=$ref_occ (per unit)"
+  for n in $(cdss_split "$SIZES"); do
+    target=$(( n * GIB ))
+    plain="$tdir/${type}_${n}gib.plain"
+    cdss_info "[$type/${n}GiB] duplicating seed -> plain ($n GiB)"
+    copies=$(( (target + seed_bytes - 1) / seed_bytes ))
+    # Bounded tiling; final cat may get SIGPIPE when head stops (benign).
+    ( i=0; while [ "$i" -lt "$copies" ]; do cat "$seed"; i=$((i+1)); done ) 2>/dev/null \
+      | head -c "$target" > "$plain" || true
+    [ "$(cdss_filesize "$plain")" -eq "$target" ] || cdss_die "tiling produced wrong size for $type/${n}GiB"
 
-  for codec in $(cdss_split "$CODECS"); do
-    case "$codec" in
-      gzip|zstd|lz4)
-        cdss_have "$codec" || { cdss_info "[$type] skip codec '$codec' (CLI not installed)"; continue; };;
-      ans) cdss_info "[$type] skip codec 'ans' (GPU-only; use bench_gpu.sh)"; continue;;
-    esac
-    ext="$(codec_ext "$codec")"; lvl="$(codec_level "$codec")"
-    unit_art="$tdir/unit.$ext"
-    cdss_info "[$type/$codec] compressing unit (level $lvl)"
-    compress_unit "$codec" "$lvl" "$plain" "$unit_art"
-    unit_comp=$(cdss_filesize "$unit_art")
+    # Exact reference counts on this plain (grep exits 1 when zero matches).
+    set +e
+    ref_lines=$(grep -c -F "$PATTERN" "$plain"); [ $? -gt 1 ] && ref_lines=0
+    ref_occ=$(grep -o -F "$PATTERN" "$plain" | wc -l | tr -d ' ')
+    set -e
+    cdss_info "[$type/${n}GiB] reference for '$PATTERN': lines=$ref_lines occ=$ref_occ"
 
-    for n in $(cdss_split "$SIZES"); do
-      out="$tdir/${type}_${n}u.$ext"
-      if [ "$n" -eq 1 ]; then
-        cp -f "$unit_art" "$out"
-      else
-        : > "$out"
-        i=0; while [ "$i" -lt "$n" ]; do cat "$unit_art" >> "$out"; i=$((i+1)); done
-      fi
-      decomp=$(( UNIT_BYTES * n )); comp=$(( unit_comp * n ))
-      ratio=$(python3 -c "print(round($comp/$decomp,4))")
-      exp_lines=$(( ref_lines * n )); exp_occ=$(( ref_occ * n ))
+    for codec in $(cdss_split "$CODECS"); do
+      case "$codec" in
+        gzip|zstd|lz4) cdss_have "$codec" || { cdss_info "[$type/${n}GiB] skip codec '$codec' (CLI not installed)"; continue; };;
+        ans) cdss_info "[$type/${n}GiB] skip codec 'ans' (GPU-only; use bench_gpu.sh)"; continue;;
+      esac
+      ext="$(codec_ext "$codec")"; lvl="$(codec_level "$codec")"
+      art="$tdir/${type}_${n}gib.$ext"
+      cdss_info "[$type/${n}GiB/$codec] compressing (level $lvl)"
+      compress_file "$codec" "$lvl" "$plain" "$art"
+      comp=$(cdss_filesize "$art")
+      ratio=$(python3 -c "print(round($comp/$target,4))")
       printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
-        "$type" "$codec" "$n" "$decomp" "$comp" "$ratio" "$out" "$exp_lines" "$exp_occ" "$lvl" >> "$INDEX"
+        "$type" "$codec" "$n" "$target" "$comp" "$ratio" "$art" "$ref_lines" "$ref_occ" "$lvl" >> "$INDEX"
     done
-    rm -f "$unit_art"
-  done
 
-  # Optional plain corpora (for the search-only roofline).
-  if [ "$KEEP_PLAIN" -eq 1 ]; then
-    for n in $(cdss_split "$SIZES"); do
-      out="$tdir/${type}_${n}u.plain"
-      if [ "$n" -eq 1 ]; then cp -f "$plain" "$out";
-      else : > "$out"; i=0; while [ "$i" -lt "$n" ]; do cat "$plain" >> "$out"; i=$((i+1)); done; fi
-      decomp=$(( UNIT_BYTES * n ))
+    if [ "$KEEP_PLAIN" -eq 1 ]; then
       printf '%s\tplain\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
-        "$type" "$n" "$decomp" "$decomp" "1.0000" "$out" "$(( ref_lines * n ))" "$(( ref_occ * n ))" "0" >> "$INDEX"
-    done
-  fi
-  rm -f "$plain"
+        "$type" "$n" "$target" "$target" "1.0000" "$plain" "$ref_lines" "$ref_occ" "0" >> "$INDEX"
+    else
+      rm -f "$plain"
+    fi
+  done
 done
 
 cdss_info "corpus index written: $INDEX"

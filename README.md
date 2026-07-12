@@ -48,12 +48,14 @@ throughput vs size (skips cleanly if matplotlib is absent).
 
 ## Corpora model
 
-One 100 MiB **seed** per type → tiled to a **unit** plain (`--unit-mib`, default
-1024 = 1 GiB) → compressed once per codec → **concatenated N times** for each
-requested size (valid multiframe `.zst` / multi-member `.gz` / concatenated
-`.lz4`; the GPU path uses the engine's chunked `.zst`). This pins the ratio to
-the real 1-unit ratio and never writes a huge plain file. Generated data lives
-under `corpora/` and `results/` (both git-ignored).
+For each requested size (in GiB, from `--sizes`), the ~100 MB **base seed** is
+**duplicated up to that size** to form a plain file, which is then **compressed
+once per codec**. So `--sizes 1,2,10` builds 1 / 2 / 10 GiB corpora directly from
+the seed. The plain file is grepped for the **exact** reference match count, then
+deleted (keep it with `--keep-plain`, which also adds a search-only plain
+baseline). The GPU path builds the same-size plain and compresses it with the
+engine's chunked `.zst`. Generated data lives under `corpora/` and `results/`
+(both git-ignored).
 
 ## Corpora: real by default
 
@@ -79,7 +81,7 @@ CDSS_SIZES="1,2,10,20" CDSS_PATTERN="the" CDSS_ZSTD_LEVEL=9 ./gen/make_corpora.s
 CDSS_WARMUP=1 CDSS_TIMED=5 ./bench/bench_cpu.sh
 ```
 
-Key knobs: `CDSS_TYPES`, `CDSS_SIZES`, `CDSS_UNIT_MIB`, `CDSS_CODECS`,
+Key knobs: `CDSS_TYPES`, `CDSS_SIZES` (GiB), `CDSS_CODECS`,
 `CDSS_PATTERN`, `CDSS_{ZSTD,GZIP,LZ4}_LEVEL`, `CDSS_WARMUP`, `CDSS_TIMED`,
 `CDSS_STREAMS/BATCH/READERS/GPU_ID` (GPU).
 
