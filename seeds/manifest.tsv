@@ -1,0 +1,20 @@
+# cdss_bench seed manifest.  One row per data type.
+# Columns (TAB-separated):
+#   type      logical type name (wiki|json|log|sdf|...)
+#   filename  file to place under seeds/data/
+#   size_mib  expected/target seed size in MiB (used for synthetic fallback)
+#   sha256    expected checksum, or "-" to skip verification (synthetic seeds)
+#   source    where to fetch a REAL seed from; one of:
+#               -                 (no real source; synthetic generator is used)
+#               s3://bucket/key   (fetched with `aws s3 cp`)
+#               https://...       (fetched with curl)
+#
+# To use REAL corpora: stage the four seed files (e.g. in an S3 bucket), then
+# fill in sha256 + source below. Until then, fetch_seeds.sh generates
+# deterministic synthetic seeds so the harness runs out-of-the-box anywhere.
+#
+# type	filename	size_mib	sha256	source
+wiki	wiki_seed.txt	100	-	-
+json	json_seed.json	100	-	-
+log	log_seed.log	100	-	-
+sdf	sdf_seed.sdf	100	-	-

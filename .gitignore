@@ -1,6 +1,18 @@
+# --- CUDA intermediates (from initial commit) ---
 *.i
 *.ii
 *.gpu
 *.ptx
 *.cubin
 *.fatbin
+
+# --- cdss_bench generated / fetched data (never commit corpora or results) ---
+seeds/data/
+corpora/
+results/
+engine/
+
+# --- Python / editor cruft ---
+__pycache__/
+*.pyc
+.DS_Store
