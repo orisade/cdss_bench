@@ -26,9 +26,12 @@ CDSS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Target corpus sizes in GiB (comma list). Each is built by duplicating the
 # ~100 MB base seed up to that size, then compressing.
 : "${CDSS_SIZES:=1,2,10}"
-# Literal search pattern. "the" has no self-overlap, so grep -o agrees with the
-# GPU engine's start-position count (see engine docs).
-: "${CDSS_PATTERN:=the}"
+# Literal search pattern. "Sherlock" is a RARE term (~63/100 MB in enwik8, 0 in
+# the structured corpora), so the search benchmark measures decompress+scan
+# throughput rather than match-materialization cost (unlike "the", which yields
+# ~97M matches at 10 GiB and saturates the engine's match buffer). It has no
+# self-overlap, so grep -o agrees with the GPU engine's start-position count.
+: "${CDSS_PATTERN:=Sherlock}"
 # Codecs to build/benchmark. CPU-decodable: gzip zstd lz4. GPU-only: ans.
 : "${CDSS_CODECS:=gzip,zstd,lz4}"
 # Per-codec compression levels.
