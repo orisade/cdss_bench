@@ -75,11 +75,13 @@ for type in $(cdss_split "$TYPES"); do
       | head -c "$target" > "$plain" || true
     [ "$(cdss_filesize "$plain")" -eq "$target" ] || cdss_die "tiling produced wrong size for $type/${n}GiB"
 
-    # Exact reference counts on this plain (grep exits 1 when zero matches).
+    # Exact reference counts on this plain. ref_lines via grep -c (fast); ref_occ
+    # (non-overlapping literal occurrences) via a single-pass awk index counter
+    # (far faster than `grep -o | wc -l`, which would emit ~100M lines at 10 GiB).
     set +e
     ref_lines=$(grep -c -F "$PATTERN" "$plain"); [ $? -gt 1 ] && ref_lines=0
-    ref_occ=$(grep -o -F "$PATTERN" "$plain" | wc -l | tr -d ' ')
     set -e
+    ref_occ=$(awk -v p="$PATTERN" '{s=$0;L=length(p);i=index(s,p);while(i){n++;s=substr(s,i+L);i=index(s,p)}} END{print n+0}' "$plain")
     cdss_info "[$type/${n}GiB] reference for '$PATTERN': lines=$ref_lines occ=$ref_occ"
 
     for codec in $(cdss_split "$CODECS"); do

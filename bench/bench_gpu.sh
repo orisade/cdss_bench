@@ -72,7 +72,7 @@ for type in $(cdss_split "$TYPES"); do
       | head -c "$target" > "$plain" || true
     [ "$(cdss_filesize "$plain")" -eq "$target" ] || cdss_die "tiling produced wrong size for $type/${n}GiB"
     set +e
-    ref_occ=$(grep -o -F "$PATTERN" "$plain" | wc -l | tr -d ' ')
+    ref_occ=$(awk -v p="$PATTERN" '{s=$0;L=length(p);i=index(s,p);while(i){n++;s=substr(s,i+L);i=index(s,p)}} END{print n+0}' "$plain")
     set -e
 
     file="$tdir/${type}_${n}gib_gpu.zst"
